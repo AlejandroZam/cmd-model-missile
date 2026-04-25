@@ -56,6 +56,7 @@ void Missile::initialize() {
     acc_           = Eigen::Vector3d::Zero();
     tpos_          = Eigen::Vector3d::Zero();
     tvel_          = Eigen::Vector3d::Zero();
+    noiseAcc_      = Eigen::Vector3d::Zero();
     hasTargetData_ = false;
     range_         = 0.0;
     intercept_     = false;
@@ -79,7 +80,7 @@ void Missile::initialize() {
         logger_.open(outputDir + "/" + name, logFmt, outputSignals_);
 }
 
-void Missile::update() {
+void Missile::eventUpdate() {
     StateMsg msg;
     if (subscriber_.take(msg)) {
         tpos_ = {msg.px, msg.py, msg.pz};
@@ -87,29 +88,34 @@ void Missile::update() {
         hasTargetData_ = true;
     }
 
-    if (!hasTargetData_) { acc_ = Eigen::Vector3d::Zero(); return; }
+    noiseAcc_ = {noiseAx_.sample(), noiseAy_.sample(), noiseAz_.sample()};
 
-    Eigen::Vector3d los = tpos_ - pos_;
-    range_ = los.norm();
+    if (!hasTargetData_) return;
 
+    range_ = (tpos_ - pos_).norm();
     if (range_ < missDist_) {
         intercept_ = true;
         Sim::stop  = -1;
-        acc_       = Eigen::Vector3d::Zero();
+    }
+}
+
+void Missile::derivatives() {
+    if (!hasTargetData_ || intercept_) {
+        acc_ = Eigen::Vector3d::Zero();
         return;
     }
 
-    Eigen::Vector3d losHat  = los / range_;
+    Eigen::Vector3d los     = tpos_ - pos_;
+    double          r       = los.norm();
+    Eigen::Vector3d losHat  = los / r;
     Eigen::Vector3d relVel  = tvel_ - vel_;
     double          Vc      = -relVel.dot(losHat);
-    Eigen::Vector3d losRate = (relVel - relVel.dot(losHat) * losHat) / range_;
+    Eigen::Vector3d losRate = (relVel - relVel.dot(losHat) * losHat) / r;
 
-    acc_ = navRatio_ * Vc * losRate;
+    acc_ = navRatio_ * Vc * losRate + noiseAcc_;
 
     double aMag = acc_.norm();
     if (aMag > aMax_) acc_ *= aMax_ / aMag;
-
-    acc_ += Eigen::Vector3d(noiseAx_.sample(), noiseAy_.sample(), noiseAz_.sample());
 }
 
 void Missile::report() {

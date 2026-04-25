@@ -17,7 +17,8 @@ public:
     void loadConfig(const std::string& path) override;
     void seed(uint64_t s) override;
     void initialize() override;
-    void update() override;
+    void eventUpdate() override;
+    void derivatives() override;
     void report() override;
 
     const Eigen::Vector3d& pos3() const { return pos_; }
@@ -33,6 +34,7 @@ private:
     Eigen::Vector3d tpos_ = Eigen::Vector3d::Zero();
     Eigen::Vector3d tvel_ = Eigen::Vector3d::Zero();
     bool            hasTargetData_ = false;
+    Eigen::Vector3d noiseAcc_      = Eigen::Vector3d::Zero();
 
     double   range_     = 0.0;
     double   navRatio_  = 4.0;
